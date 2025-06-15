@@ -1,4 +1,6 @@
-def calculate_energy(host: 'Host') -> float:
+from models import Host
+
+def calculate_energy(host: Host) -> float:
     """
     Linear energy model:
     energy = base_power + (max_power - base_power) * utilization

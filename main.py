@@ -13,7 +13,7 @@ import time
 class EnergySchedulerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("WiseCloud - Energy-Efficient VM Scheduler Simulator")
+        self.root.title("Energy-Efficient VM Scheduler Simulator")
         self.root.geometry("1200x800")  # Set initial window size
         
         # Configure style
@@ -97,21 +97,19 @@ class EnergySchedulerApp:
         run_button = ttk.Button(input_frame, text="Run Simulation", command=self.run_simulation)
         run_button.grid(row=len(params)+1, column=0, columnspan=2, pady=10)
 
-        # Status frame - Shows current simulation state
-        status_frame = ttk.LabelFrame(left_frame, text="Current Simulation Status", padding="10")
+        # Status frame
+        status_frame = ttk.LabelFrame(left_frame, text="Simulation Status", padding="10")
         status_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
         self.status_text = tk.Text(status_frame, width=40, height=15, wrap=tk.WORD)
         self.status_text.pack(fill='both', expand=True)
-        self.status_text.insert(tk.END, "Simulation not started. Click 'Run Simulation' to begin.")
 
-        # Results frame - Shows final results after simulation
-        results_frame = ttk.LabelFrame(right_frame, text="Final Simulation Results", padding="10")
+        # Results frame
+        results_frame = ttk.LabelFrame(right_frame, text="Real-time Results", padding="10")
         results_frame.pack(fill='both', expand=True, padx=5, pady=5)
 
         self.results_text = tk.Text(results_frame, width=40, height=15, wrap=tk.WORD)
         self.results_text.pack(fill='both', expand=True)
-        self.results_text.insert(tk.END, "Results will appear here after simulation completes.")
 
     def _setup_host_tab(self):
         # Host configuration frame
@@ -283,16 +281,15 @@ class EnergySchedulerApp:
         # Update current status
         stats = self.simulation.get_statistics()
         
-        # Update status text with current state
+        # Update status text
         self.status_text.delete("1.0", tk.END)
-        self.status_text.insert(tk.END, "=== Current Simulation State ===\n\n")
-        self.status_text.insert(tk.END, f"Time Elapsed: {stats['simulation_time']:.1f}s\n")
+        self.status_text.insert(tk.END, f"Simulation Time: {stats['simulation_time']:.1f}s\n")
         self.status_text.insert(tk.END, f"Active VMs: {stats['active_vms']}\n")
-        self.status_text.insert(tk.END, f"Migrations So Far: {stats['total_migrations']}\n")
+        self.status_text.insert(tk.END, f"Total Migrations: {stats['total_migrations']}\n")
         self.status_text.insert(tk.END, f"Current Energy: {stats['total_energy']:.2f} W\n")
         self.status_text.insert(tk.END, f"Average Energy: {stats['average_energy']:.2f} W\n\n")
 
-        self.status_text.insert(tk.END, "Current Host Utilizations:\n")
+        self.status_text.insert(tk.END, "Host Utilizations:\n")
         for host_id, util in stats['host_utilizations'].items():
             self.status_text.insert(tk.END, f"{host_id}: {util*100:.1f}%\n")
 
@@ -426,8 +423,8 @@ class EnergySchedulerApp:
     def _display_statistics(self, stats):
         """Display final simulation statistics."""
         self.results_text.delete("1.0", tk.END)
-        self.results_text.insert(tk.END, "=== Final Simulation Results ===\n\n")
-        self.results_text.insert(tk.END, f"Total Duration: {stats['simulation_time']:.1f}s\n")
+        self.results_text.insert(tk.END, "Simulation Complete!\n\n")
+        self.results_text.insert(tk.END, f"Total Simulation Time: {stats['simulation_time']:.1f}s\n")
         self.results_text.insert(tk.END, f"Final Active VMs: {stats['active_vms']}\n")
         self.results_text.insert(tk.END, f"Total Migrations: {stats['total_migrations']}\n")
         self.results_text.insert(tk.END, f"Total Energy: {stats['total_energy']:.2f} W\n")
