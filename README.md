@@ -1,5 +1,4 @@
 # WiseCloud: Energy-Efficient Virtual Machine Scheduler Simulator
-## Internship Project Documentation
 
 ### Project Relevance: Energy Consumption in Virtualized Cloud Data Centers
 
