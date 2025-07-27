@@ -95,6 +95,7 @@ The project follows a modular architecture with clear separation of concerns:
 - **Programming Language**: Python 3.8+
 - **GUI Framework**: Tkinter
 - **Data Visualization**: Matplotlib
+- **Cloud Integration**: AWS Boto3
 - **Version Control**: Git
 - **Dependencies**: See requirements.txt for complete list
 
@@ -158,6 +159,14 @@ Handles data operations:
 - Historical data analysis
 - Performance benchmarking
 
+#### 7. AWS Integration (`aws_data_fetcher.py`)
+Provides cloud integration capabilities:
+- Real-time EC2 metrics fetching
+- AWS CloudWatch integration
+- Instance discovery and monitoring
+- Credential management
+- Cloud-based VM data generation
+
 ### Features and Capabilities
 
 #### 1. VM Scheduling
@@ -188,6 +197,13 @@ Handles data operations:
 - Pause/Resume functionality
 - Results export
 
+#### 5. AWS Cloud Integration
+- Real-time EC2 instance monitoring
+- CloudWatch metrics integration
+- Automatic VM data generation from AWS
+- Credential validation and management
+- Multi-region support
+
 ### Implementation Details
 
 #### Installation
@@ -212,9 +228,107 @@ Handles data operations:
 - Energy parameters in `energy_model.py`
 - Simulation parameters in `main.py`
 
+#### AWS Setup Requirements
+To use AWS integration features:
+1. AWS Account with EC2 and CloudWatch access
+2. IAM user with appropriate permissions:
+   - `ec2:DescribeInstances`
+   - `cloudwatch:GetMetricStatistics`
+   - `cloudwatch:ListMetrics`
+3. Access Key ID and Secret Access Key
+4. EC2 instances running in your selected region
+
+#### AWS Integration: Local Usage & Real-Time Cloud Data
+
+WiseCloud now supports **real-time integration with AWS EC2 and CloudWatch**. You can fetch live metrics from your own AWS account and use them to drive VM simulation scenarios—**all from your local machine**.
+
+---
+
+##### How AWS Integration Works
+- **No deployment to AWS is required.**  
+  You run the app locally on your computer.
+- The app connects to AWS using your credentials and fetches metrics for the EC2 instances you specify.
+- All AWS API calls are made securely over the internet using the `boto3` library.
+
+---
+
+##### Requirements for AWS Integration
+1. **AWS Account**  
+   You must have an AWS account.
+2. **IAM User & Permissions**  
+   Create an IAM user with these permissions:
+   - `ec2:DescribeInstances`
+   - `cloudwatch:GetMetricStatistics`
+   - `cloudwatch:ListMetrics`
+3. **Access Keys**  
+   Obtain your **Access Key ID** and **Secret Access Key** for the IAM user.
+4. **Running EC2 Instances**  
+   You must have EC2 instances running in your AWS account and know their **Instance IDs**.
+5. **Internet Connection**  
+   Your computer must be online to connect to AWS.
+
+---
+
+##### How to Use AWS Integration (Step-by-Step)
+1. **Run the Application Locally**
+   ```bash
+   python main.py
+   ```
+2. **Configure AWS Credentials**
+   - Go to the **"AWS Integration"** tab.
+   - Enter your **Access Key ID** and **Secret Access Key**.
+   - Select the correct **AWS region** (e.g., `us-east-1`).
+   - (Optional) Test your credentials using the "Test AWS Credentials" button.
+3. **Enable Live AWS Data in Dataset Tab**
+   - Go to the **"Dataset Configuration"** tab.
+   - Check the **"Use Live AWS Data"** checkbox.
+   - Enter your EC2 **Instance IDs** (comma-separated, e.g., `i-1234567890abcdef0,i-0987654321fedcba0`).
+4. **Run the Simulation**
+   - Click **Run Simulation**.
+   - The app will fetch real-time metrics from AWS for the specified instances, create VMs, and start the simulation.
+
+---
+
+##### Threading and UI Responsiveness
+- **All AWS data fetching is performed in background threads.**
+- The UI remains responsive and shows a "Loading..." status while waiting for AWS.
+- Once data is fetched, the simulation starts automatically.
+- All error messages (e.g., invalid credentials, no data) are shown in the UI.
+
+---
+
+##### Security Note
+- **Never share your AWS credentials.**
+- Use an IAM user with only the permissions required for this app.
+- Credentials are only used locally and are not stored or transmitted anywhere except to AWS.
+
+---
+
+##### Troubleshooting
+- If you see errors like `InvalidClientTokenId`, check your credentials.
+- If you see "No valid VMs could be created from AWS data," check your instance IDs and that your instances are running.
+- The app must be able to reach AWS over the internet.
+
+---
+
+##### Summary Table: Local AWS Integration
+
+| Feature                | Description                                                                 |
+|------------------------|-----------------------------------------------------------------------------|
+| Deployment             | **Not required** (run locally)                                              |
+| AWS Credentials        | Required (Access Key ID & Secret Access Key)                                |
+| EC2 Instance IDs       | Required (comma-separated, e.g., `i-xxxxxx,i-yyyyyy`)                       |
+| Internet Connection    | Required                                                                    |
+| Permissions Needed     | `ec2:DescribeInstances`, `cloudwatch:GetMetricStatistics`, `cloudwatch:ListMetrics` |
+| UI Responsiveness      | Maintained via threading                                                    |
+| Error Handling         | All errors shown in the GUI                                                 |
+
+---
+
 ### Usage Guide
 
-#### Running the Simulation
+> **Note:** You do NOT need to deploy this app to AWS. It works locally on your computer. All AWS integration is handled securely via your credentials and internet connection.
+
 1. Launch the application:
    ```bash
    python main.py
