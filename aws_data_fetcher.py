@@ -108,7 +108,7 @@ def validate_aws_credentials(access_key_id, secret_access_key, region='us-east-1
         )
         
         # Try to describe instances (this will fail if credentials are invalid)
-        ec2.describe_instances(MaxResults=1)
+        ec2.describe_instances(MaxResults=5)
         return True, "Credentials are valid"
         
     except Exception as e:
