@@ -60,8 +60,14 @@ def fetch_ec2_metrics(instance_ids, region='us-east-1', access_key_id=None, secr
                     avg_cpu = 0.0
                 
                 # Create VM data dictionary
+                # For VM scheduling, we need CPU cores, not utilization percentage
+                # AWS instances typically have 1-32 cores, so we'll estimate based on instance type
+                # For now, we'll use a reasonable default and store utilization separately
+                estimated_cpu_cores = max(1, round(avg_cpu / 10))  # Rough estimate: 10% utilization = 1 core
+                
                 vm_info = {
-                    'cpu': avg_cpu,
+                    'cpu': estimated_cpu_cores,  # CPU cores (not percentage)
+                    'cpu_utilization': avg_cpu,  # Store actual utilization percentage
                     'ram': 8.0,  # Default RAM in GB
                     'duration': 15.0,  # Default duration in minutes
                     'instance_id': instance_id
@@ -74,7 +80,8 @@ def fetch_ec2_metrics(instance_ids, region='us-east-1', access_key_id=None, secr
                 logging.error(f"Error fetching metrics for instance {instance_id}: {str(e)}")
                 # Add default data for failed instances
                 vm_data.append({
-                    'cpu': 0.0,
+                    'cpu': 1,  # Default to 1 CPU core
+                    'cpu_utilization': 0.0,  # Default utilization
                     'ram': 8.0,
                     'duration': 15.0,
                     'instance_id': instance_id,

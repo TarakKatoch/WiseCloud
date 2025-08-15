@@ -106,6 +106,9 @@ class EnergySchedulerApp:
         scheduler_combo = ttk.Combobox(input_frame, textvariable=self.scheduler_var, font=("Segoe UI", 11), state="readonly")
         scheduler_combo['values'] = ('Best-Fit Decreasing', 'Random', 'Minimum Utilization')
         scheduler_combo.grid(row=len(params), column=1, padx=5, pady=6, sticky="ew")
+        
+        # Bind the scheduler change to update the indicator
+        scheduler_combo.bind('<<ComboboxSelected>>', self._on_scheduler_change)
 
         # Buttons
         button_frame = ttk.Frame(input_frame)
@@ -114,6 +117,8 @@ class EnergySchedulerApp:
         run_button.pack(side='left', padx=(0, 10))
         run_all_button = ttk.Button(button_frame, text="Compare All Algorithms", command=self.run_all_schedulers, width=22)
         run_all_button.pack(side='left', padx=(0, 10))
+        reset_button = ttk.Button(button_frame, text="Reset to Generated VMs", command=self.reset_to_generated_vms, width=20)
+        reset_button.pack(side='left', padx=(0, 10))
         # Place Stop button on a new row for visibility, but keep its appearance the same as others
         stop_button_frame = ttk.Frame(input_frame)
         stop_button_frame.grid(row=len(params)+2, column=0, columnspan=2, pady=(12, 0))
@@ -135,6 +140,16 @@ class EnergySchedulerApp:
         self.status_var = tk.StringVar(value="Idle")
         self.status_label = ttk.Label(progress_frame, textvariable=self.status_var, font=("Segoe UI", 10, "italic"), foreground="#0078D7")
         self.status_label.pack(anchor='w')
+        
+        # VM Source Indicator
+        self.vm_source_var = tk.StringVar(value="VM Source: Generated VMs")
+        self.vm_source_label = ttk.Label(progress_frame, textvariable=self.vm_source_var, font=("Segoe UI", 9), foreground="#666666")
+        self.vm_source_label.pack(anchor='w')
+        
+        # Scheduling Policy Indicator
+        self.scheduling_policy_var = tk.StringVar(value="Scheduling Policy: Best-Fit Decreasing")
+        self.scheduling_policy_label = ttk.Label(progress_frame, textvariable=self.scheduling_policy_var, font=("Segoe UI", 9), foreground="#666666")
+        self.scheduling_policy_label.pack(anchor='w')
 
         # Section: Simulation Status
         status_frame = ttk.LabelFrame(left_frame, text="Simulation Status", padding="12 8 12 8")
@@ -568,25 +583,62 @@ class EnergySchedulerApp:
             )
             hosts.append(host)
 
-        # Generate VMs based on workload type
-        vms = self.generate_vms(num_vms)
-        
         # Check if AWS data is being fetched asynchronously
         if hasattr(self, 'aws_fetching_vms') and self.aws_fetching_vms:
             # AWS data is being fetched, don't start simulation yet
             return
         
+        # Check if we have AWS-generated VMs to use
+        if hasattr(self, 'aws_generated_vms') and self.aws_generated_vms:
+            # Use AWS-generated VMs
+            vms = self.aws_generated_vms
+            self.vm_source_var.set(f"VM Source: AWS Data ({len(vms)} VMs)")
+            self.results_text.insert(tk.END, f"Using {len(vms)} VMs generated from AWS data:\n")
+            for vm in vms:
+                # Check if this is an AWS VM with utilization data
+                if hasattr(vm, 'aws_utilization'):
+                    self.results_text.insert(tk.END, f"  {vm.vm_id}: CPU={vm.cpu} cores ({vm.aws_utilization:.2f}% util), RAM={vm.ram:.1f}GB\n")
+                else:
+                    self.results_text.insert(tk.END, f"  {vm.vm_id}: CPU={vm.cpu} cores, RAM={vm.ram:.1f}GB\n")
+            self.results_text.insert(tk.END, "\n")
+        else:
+            # Generate VMs based on workload type
+            vms = self.generate_vms(num_vms)
+            self.vm_source_var.set(f"VM Source: Generated VMs ({len(vms)} VMs)")
+            self.results_text.insert(tk.END, f"Generated {len(vms)} VMs using workload patterns:\n")
+            for vm in vms:
+                self.results_text.insert(tk.END, f"  {vm.vm_id}: CPU={vm.cpu} cores, RAM={vm.ram:.1f}GB\n")
+            self.results_text.insert(tk.END, "\n")
+        
         if not vms:
             return
 
-        # Run selected scheduler
+        # Get scheduler name for configuration summary
         scheduler_name = self.scheduler_var.get()
+
+        # Add simulation configuration summary
+        self.results_text.insert(tk.END, "=== SIMULATION CONFIGURATION ===\n")
+        self.results_text.insert(tk.END, f"Scheduling Policy: {scheduler_name}\n")
+        if hasattr(self, 'aws_generated_vms') and self.aws_generated_vms:
+            self.results_text.insert(tk.END, f"VM Source: AWS Data ({len(self.aws_generated_vms)} VMs)\n")
+        else:
+            self.results_text.insert(tk.END, f"VM Source: Generated VMs ({len(vms)} VMs)\n")
+        self.results_text.insert(tk.END, f"Hosts: {len(hosts)} (CPU: {hosts[0].total_cpu}, RAM: {hosts[0].total_ram}GB)\n")
+        self.results_text.insert(tk.END, f"Migration Threshold: {self.migration_threshold_var.get()}\n")
+        self.results_text.insert(tk.END, f"Duration: {self.sim_duration_var.get()} seconds\n")
+        self.results_text.insert(tk.END, "=" * 40 + "\n\n")
+        self.results_text.insert(tk.END, "Starting simulation...\n\n")
+
+        # Run selected scheduler
         if scheduler_name == "Best-Fit Decreasing":
             best_fit_decreasing(vms, hosts)
         elif scheduler_name == "Random":
             random_scheduler(vms, hosts)
         else:  # Minimum Utilization
             minimum_utilization_scheduler(vms, hosts)
+        
+        # Update scheduling policy indicator to show which policy is being used
+        self.scheduling_policy_var.set(f"Scheduling Policy: {scheduler_name} (Active)")
 
         # Create and start simulation
         self.simulation = Simulation(
@@ -613,11 +665,25 @@ class EnergySchedulerApp:
             elapsed += interval
         self.is_simulation_running = False
         self.root.after(0, lambda: self.stop_button.config(state='disabled'))
+        
+        # Reset scheduling policy indicator when simulation completes
+        self.root.after(0, self._reset_scheduling_policy_indicator)
 
     def _display_statistics(self, stats):
         """Display final simulation statistics."""
         self.results_text.delete("1.0", tk.END)
         self.results_text.insert(tk.END, "Simulation Complete!\n\n")
+        
+        # Show which scheduling policy was used
+        scheduler_name = self.scheduler_var.get()
+        self.results_text.insert(tk.END, f"Scheduling Policy Used: {scheduler_name}\n")
+        
+        # Show VM source if AWS data was used
+        if hasattr(self, 'aws_generated_vms') and self.aws_generated_vms:
+            self.results_text.insert(tk.END, f"VM Source: AWS Data ({len(self.aws_generated_vms)} VMs)\n")
+        else:
+            self.results_text.insert(tk.END, "VM Source: Generated VMs\n")
+        
         self.results_text.insert(tk.END, f"Total Simulation Time: {stats['simulation_time']:.1f}s\n")
         self.results_text.insert(tk.END, f"Final Active VMs: {stats['active_vms']}\n")
         self.results_text.insert(tk.END, f"Total Migrations: {stats['total_migrations']}\n")
@@ -756,6 +822,10 @@ class EnergySchedulerApp:
         self._stop_requested = True
         self.status_var.set("Stopping simulation...")
         self.stop_button.config(state='disabled')
+        
+        # Reset scheduling policy indicator to show current selection (not active)
+        scheduler_name = self.scheduler_var.get()
+        self.scheduling_policy_var.set(f"Scheduling Policy: {scheduler_name}")
 
     def _test_aws_credentials(self):
         """Test AWS credentials by attempting to connect."""
@@ -858,7 +928,8 @@ class EnergySchedulerApp:
         for i, vm_info in enumerate(vm_data, 1):
             self.aws_results_text.insert(tk.END, f"Instance {i}:\n")
             self.aws_results_text.insert(tk.END, f"  Instance ID: {vm_info.get('instance_id', 'N/A')}\n")
-            self.aws_results_text.insert(tk.END, f"  CPU Utilization: {vm_info.get('cpu', 0):.2f}%\n")
+            self.aws_results_text.insert(tk.END, f"  CPU Utilization: {vm_info.get('cpu_utilization', 0):.2f}%\n")
+            self.aws_results_text.insert(tk.END, f"  Estimated CPU Cores: {vm_info.get('cpu', 1)}\n")
             self.aws_results_text.insert(tk.END, f"  RAM: {vm_info.get('ram', 8):.1f} GB\n")
             self.aws_results_text.insert(tk.END, f"  Duration: {vm_info.get('duration', 15):.1f} minutes\n")
             
@@ -882,10 +953,12 @@ class EnergySchedulerApp:
             if 'error' not in vm_info:  # Skip instances with errors
                 vm = VM(
                     vm_id=f"AWS-{vm_info['instance_id']}",
-                    cpu=vm_info['cpu'] / 100.0,  # Convert percentage to decimal
+                    cpu=vm_info['cpu'],  # Now using CPU cores directly
                     ram=vm_info['ram'],
                     duration=vm_info['duration'] * 60  # Convert minutes to seconds
                 )
+                # Store AWS utilization data for display purposes
+                vm.aws_utilization = vm_info.get('cpu_utilization', 0.0)
                 vms.append(vm)
         
         if not vms:
@@ -897,6 +970,9 @@ class EnergySchedulerApp:
         
         # Store the AWS-generated VMs for use in simulation
         self.aws_generated_vms = vms
+        
+        # Update VM source indicator
+        self.vm_source_var.set(f"VM Source: AWS Data ({len(vms)} VMs)")
         
         messagebox.showinfo("Success", f"Created {len(vms)} VMs from AWS data. Ready for simulation!")
 
@@ -957,10 +1033,12 @@ class EnergySchedulerApp:
                     if 'error' not in vm_info:
                         vm = VM(
                             vm_id=f"AWS-{vm_info['instance_id']}",
-                            cpu=vm_info['cpu'] / 100.0,  # Convert percentage to decimal
+                            cpu=vm_info['cpu'],  # Now using CPU cores directly
                             ram=vm_info['ram'],
                             duration=vm_info['duration'] * 60  # Convert minutes to seconds
                         )
+                        # Store AWS utilization data for display purposes
+                        vm.aws_utilization = vm_info.get('cpu_utilization', 0.0)
                         vms.append(vm)
                 
                 # Store results for main thread to process
@@ -994,6 +1072,9 @@ class EnergySchedulerApp:
         
         # Update VM count
         self.vm_count_var.set(len(vms))
+        
+        # Update VM source indicator
+        self.vm_source_var.set(f"VM Source: AWS Data ({len(vms)} VMs)")
         
         # Show success message
         messagebox.showinfo("Success", f"Successfully created {len(vms)} VMs from AWS data!")
@@ -1113,6 +1194,20 @@ class EnergySchedulerApp:
             random_scheduler(vms, hosts)
         else:  # Minimum Utilization
             minimum_utilization_scheduler(vms, hosts)
+        
+        # Update scheduling policy indicator to show which policy is being used
+        self.scheduling_policy_var.set(f"Scheduling Policy: {scheduler_name} (Active)")
+
+        # Add simulation configuration summary to results
+        self.results_text.delete("1.0", tk.END)
+        self.results_text.insert(tk.END, "=== SIMULATION CONFIGURATION ===\n")
+        self.results_text.insert(tk.END, f"Scheduling Policy: {scheduler_name}\n")
+        self.results_text.insert(tk.END, f"VM Source: AWS Data ({len(vms)} VMs)\n")
+        self.results_text.insert(tk.END, f"Hosts: {len(hosts)} (CPU: {hosts[0].total_cpu}, RAM: {hosts[0].total_ram}GB)\n")
+        self.results_text.insert(tk.END, f"Migration Threshold: {self.migration_threshold_var.get()}\n")
+        self.results_text.insert(tk.END, f"Duration: {self.sim_duration_var.get()} seconds\n")
+        self.results_text.insert(tk.END, "=" * 40 + "\n\n")
+        self.results_text.insert(tk.END, "Starting simulation...\n\n")
 
         # Create and start simulation
         self.simulation = Simulation(
@@ -1129,6 +1224,33 @@ class EnergySchedulerApp:
         self.simulation_thread.start()
         # Start update timer
         self.root.after(1000, self._update_simulation_status)
+
+    def reset_to_generated_vms(self):
+        """Reset to use generated VMs instead of AWS-generated VMs."""
+        if hasattr(self, 'aws_generated_vms'):
+            delattr(self, 'aws_generated_vms')
+        
+        # Clear results and show reset message
+        self.results_text.delete("1.0", tk.END)
+        self.results_text.insert(tk.END, "Reset to generated VMs mode.\n")
+        self.results_text.insert(tk.END, "AWS-generated VMs have been cleared.\n")
+        self.results_text.insert(tk.END, "Next simulation will use generated VMs based on workload patterns.\n\n")
+        
+        # Update status and VM source indicator
+        self.status_var.set("Reset to generated VMs")
+        self.vm_source_var.set("VM Source: Generated VMs")
+        
+        messagebox.showinfo("Reset Complete", "Successfully reset to generated VMs mode. AWS-generated VMs have been cleared.")
+
+    def _on_scheduler_change(self, event=None):
+        """Update the scheduling policy indicator when scheduler changes."""
+        scheduler_name = self.scheduler_var.get()
+        self.scheduling_policy_var.set(f"Scheduling Policy: {scheduler_name}")
+
+    def _reset_scheduling_policy_indicator(self):
+        """Reset the scheduling policy indicator to show current selection (not active)."""
+        scheduler_name = self.scheduler_var.get()
+        self.scheduling_policy_var.set(f"Scheduling Policy: {scheduler_name}")
 
     def _trim_results_text(self, max_lines=100):
         """Trim the results_text widget to keep at most max_lines."""
